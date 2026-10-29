@@ -1,0 +1,49 @@
+                                                                             QUERY PLAN                                                                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=5471.02..5471.02 rows=1 width=26) (actual time=24.713..27.451 rows=3.00 loops=1)
+   Sort Key: (COALESCE(sum(o.total_cents), '0'::bigint)) DESC
+   Sort Method: quicksort  Memory: 25kB
+   Buffers: shared hit=2488
+   ->  Finalize GroupAggregate  (cost=5470.75..5471.01 rows=1 width=26) (actual time=24.667..27.434 rows=3.00 loops=1)
+         Group Key: o.status
+         Buffers: shared hit=2485
+         ->  Gather Merge  (cost=5470.75..5470.98 rows=2 width=26) (actual time=24.656..27.395 rows=5.00 loops=1)
+               Workers Planned: 1
+               Workers Launched: 1
+               Buffers: shared hit=2485
+               ->  Sort  (cost=4470.74..4470.75 rows=1 width=26) (actual time=22.696..22.699 rows=2.50 loops=2)
+                     Sort Key: o.status
+                     Sort Method: quicksort  Memory: 25kB
+                     Buffers: shared hit=2485
+                     Worker 0:  Sort Method: quicksort  Memory: 25kB
+                     ->  Partial HashAggregate  (cost=4470.72..4470.73 rows=1 width=26) (actual time=22.672..22.675 rows=2.50 loops=2)
+                           Group Key: o.status
+                           Batches: 1  Memory Usage: 32kB
+                           Buffers: shared hit=2477
+                           Worker 0:  Batches: 1  Memory Usage: 32kB
+                           ->  Hash Join  (cost=873.50..4191.28 rows=37259 width=14) (actual time=9.472..18.108 rows=31579.50 loops=2)
+                                 Hash Cond: (oi.order_id = o.id)
+                                 Buffers: shared hit=2477
+                                 ->  Parallel Seq Scan on order_items oi  (cost=0.00..2572.59 rows=99359 width=8) (actual time=0.005..4.248 rows=84430.50 loops=2)
+                                       Buffers: shared hit=1579
+                                 ->  Hash  (cost=815.78..815.78 rows=4617 width=22) (actual time=5.166..5.168 rows=4594.00 loops=2)
+                                       Buckets: 8192  Batches: 1  Memory Usage: 316kB
+                                       Buffers: shared hit=898
+                                       ->  Hash Right Join  (cost=448.61..815.78 rows=4617 width=22) (actual time=2.890..4.364 rows=4594.00 loops=2)
+                                             Hash Cond: (p.order_id = o.id)
+                                             Buffers: shared hit=898
+                                             ->  Seq Scan on payments p  (cost=0.00..334.90 rows=12290 width=8) (actual time=0.013..0.708 rows=12343.00 loops=2)
+                                                   Buffers: shared hit=424
+                                             ->  Hash  (cost=390.90..390.90 rows=4617 width=22) (actual time=2.069..2.069 rows=4594.00 loops=2)
+                                                   Buckets: 8192  Batches: 1  Memory Usage: 316kB
+                                                   Buffers: shared hit=474
+                                                   ->  Seq Scan on orders o  (cost=0.00..390.90 rows=4617 width=22) (actual time=0.387..1.279 rows=4594.00 loops=2)
+                                                         Filter: (tenant_id = 'tenant_initech'::text)
+                                                         Rows Removed by Filter: 7785
+                                                         Buffers: shared hit=474
+ Planning:
+   Buffers: shared hit=247
+ Planning Time: 0.798 ms
+ Execution Time: 27.569 ms
+(45 rows)
+

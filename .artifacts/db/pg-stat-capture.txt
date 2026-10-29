@@ -1,0 +1,50 @@
+=== pg_stat_statements version + settings ===
+ pg_stat_statements 1.12
+ plpgsql 1.0
+
+ shared_preload_libraries 
+--------------------------
+ pg_stat_statements
+(1 row)
+
+ log_min_duration_statement 
+----------------------------
+ 100ms
+(1 row)
+
+ pg_stat_statements.track 
+--------------------------
+ top
+(1 row)
+
+=== TOP 8 by total exec time ===
+ calls | mean_ms | max_ms | pct_total |                                 query                                  
+-------+---------+--------+-----------+------------------------------------------------------------------------
+    87 |   21.96 | 296.28 |      91.7 | SELECT o.status, count(*) AS orders, coalesce(sum(o.total_cents), $2) 
+   354 |    0.15 |   5.92 |       2.5 | INSERT INTO orders (tenant_id, request_id, customer_hash, status, tota
+   318 |    0.12 |   4.23 |       1.8 | INSERT INTO payments (order_id, tenant_id, provider, provider_charge_i
+   354 |    0.08 |   1.46 |       1.4 | INSERT INTO order_items (order_id, sku, quantity, unit_price_cents) SE
+   354 |    0.05 |   0.91 |       0.8 | SELECT p.sku, p.price_cents, i.quantity FROM unnest($1::text[], $2::in
+  2186 |    0.01 |   0.31 |       0.6 | SELECT set_config($1, $2, $3)
+   350 |    0.03 |   0.35 |       0.5 | UPDATE orders SET status = $2 WHERE id = $1
+   281 |    0.03 |   1.93 |       0.4 | SELECT id, sku, title, price_cents FROM products WHERE tenant_id = $1 
+(8 rows)
+
+=== SLOWEST by mean, top 6 ===
+ calls | mean_ms | rows_per_call |                                 query                                  
+-------+---------+---------------+------------------------------------------------------------------------
+     1 | 1521.72 |        168482 | INSERT INTO order_items (order_id, sku, quantity, unit_price_cents) SE
+     1 |  272.58 |             0 | ANALYZE
+     1 |  254.26 |         12000 | INSERT INTO orders (tenant_id, request_id, customer_hash, status, tota
+     1 |  207.53 |         12000 | INSERT INTO payments (order_id, tenant_id, provider, provider_charge_i
+     1 |   42.61 |             0 | CREATE DATABASE "shop"
+    87 |   21.96 |             2 | SELECT o.status, count(*) AS orders, coalesce(sum(o.total_cents), $2) 
+(6 rows)
+
+=== per-tenant attribution via app_name / set_config ===
+ pid  | state  | usename | application_name |                            query                             
+------+--------+---------+------------------+--------------------------------------------------------------
+ 4505 | idle   | shop    |                  | UPDATE orders SET status = 'confirmed' WHERE id = $1
+ 4587 | active | shop    | psql             | SELECT pid, state, usename, application_name, left(query,60)
+(2 rows)
+

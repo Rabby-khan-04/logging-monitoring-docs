@@ -1,0 +1,259 @@
+# Alert + recording rules. Every rule here is written as a symptom ("users are
+# failing") rather than a cause ("cpu is high"), and every one has a dashboard
+# or a log query in its annotation, because an alert without a next step is
+# just noise with a siren.
+#
+# Retention on this stack is 6h, so the long windows are shorter than the ones
+# you would use in production. Where that matters, the rule says so.
+
+groups:
+  # ---- Recording rules: name the expensive queries once, reuse them ----
+  - name: shop-recorded
+    interval: 15s
+    rules:
+      - record: shop:http_request_rate:5m
+        expr: sum by (service, tenant_id) (rate(shop_http_request_duration_seconds_count[5m]))
+
+      - record: shop:http_5xx_rate:5m
+        expr: sum by (service, tenant_id) (rate(shop_http_request_duration_seconds_count{status_code=~"5.."}[5m]))
+
+      # clamp_min stops a division by zero on a quiet night. Without it the
+      # ratio goes NaN and the alert silently never fires, which is the worst
+      # possible failure mode for an alert.
+      - record: shop:http_5xx_ratio:5m
+        expr: |
+          shop:http_5xx_rate:5m
+          /
+          clamp_min(shop:http_request_rate:5m, 0.01)
+
+  # ---- The four golden signals ----
+  - name: golden-signals
+    rules:
+      - alert: ApiHighErrorRatio
+        expr: shop:http_5xx_ratio:5m > 0.01
+        for: 2m
+        labels:
+          severity: page
+          product: shop
+        annotations:
+          summary: "{{ $labels.tenant_id }}: more than 1% of requests are 5xx"
+          description: >
+            {{ $value | humanizePercentage }} of requests on {{ $labels.service }}
+            failed for the last 2 minutes.
+          runbook: "Loki: {service=\"{{ $labels.service }}\", level=\"error\"} then group by error.code"
+
+      - alert: ApiLatencyP95High
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, service, tenant_id) (rate(shop_http_request_duration_seconds_bucket[5m]))
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warn
+        annotations:
+          summary: "{{ $labels.tenant_id }}: p95 latency above 500ms"
+          description: "p95 is {{ $value | humanizeDuration }} on {{ $labels.service }}."
+          runbook: "Grafana > Latency panel, then Tempo search by tenant and duration > 1s"
+
+      - alert: ApiLatencyP99Severe
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, service) (rate(shop_http_request_duration_seconds_bucket{route!~"/unmatched"}[5m]))
+          ) > 2
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "p99 latency above 2s"
+          description: "Tail latency is {{ $value | humanizeDuration }}. Averages will hide this."
+
+          runbook: "Tempo: {name=\"POST\"} | sort desc then open the slowest trace; Grafana > Latency panel, split by route"
+      - alert: TrafficSurge
+        expr: |
+          shop:http_request_rate:5m
+          /
+          clamp_min(shop:http_request_rate:5m offset 5m, 0.01)
+          > 3
+        for: 10m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Traffic for {{ $labels.tenant_id }} tripled"
+          description: >
+            Usually a deploy, a crawler, or a tenant retrying in a loop. Not
+            paging on its own: read it together with the error ratio.
+
+          runbook: "Prometheus: sum by (tenant_id) (rate(shop_http_requests_total[5m])) to see who, then {tenant_id=\"...\"} in Loki for the endpoints"
+      - alert: TrafficCollapse
+        expr: |
+          shop:http_request_rate:5m
+          /
+          clamp_min(shop:http_request_rate:5m offset 5m, 0.01)
+          < 0.2
+        for: 10m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Traffic for {{ $labels.tenant_id }} fell below 20% of normal"
+          description: >
+            A silent outage looks exactly like this. If customers cannot reach
+            you, your error rate stays proudly at zero.
+
+          runbook: "First check whether the alert is real: curl /healthz, check TargetDown. Then Loki count_over_time per tenant"
+  # ---- Checkout: the money path ----
+  - name: checkout
+    rules:
+      - alert: CheckoutFailureBurst
+        expr: |
+          (
+            sum by (tenant_id) (rate(shop_checkout_outcome_total{outcome="error"}[5m]))
+            /
+            clamp_min(sum by (tenant_id) (rate(shop_checkout_step_total{step="payment_attempted"}[5m])), 0.01)
+          ) > 0.05
+          and
+          sum by (tenant_id) (rate(shop_checkout_step_total{step="payment_attempted"}[5m])) > 0.2
+        for: 3m
+        labels:
+          severity: page
+        annotations:
+          summary: "{{ $labels.tenant_id }}: more than 5% of checkouts are failing"
+          description: >
+            The `and` clause is a volume guard. Without it this alert pages when
+            a tenant makes one failed checkout at 04:00. That is alert fatigue
+            in one line of PromQL.
+          runbook: "Loki: {tenant_id=\"{{ $labels.tenant_id }}\", level=~\"error|warn\"}"
+
+      # Note the deliberate absence of a "checkouts == 0" alert: on a quiet
+      # tenant that fires daily. docs/10a explains the alternatives.
+      - alert: PaymentGatewaySlow
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, outcome) (rate(shop_payment_provider_duration_seconds_bucket[5m]))
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Payment gateway p95 above 800ms"
+          description: "Upstream slowness. Check whether our deadline (2.5s) is being hit."
+
+          runbook: "Prometheus: histogram_quantile(0.95, sum by (le) (rate(shop_payment_provider_duration_seconds_bucket[5m]))); Tempo: {\"payment.status\"=~\".+\"}"
+      - alert: PaymentGatewayTimeouts
+        expr: sum(increase(shop_payment_provider_duration_seconds_count{outcome="timeout"}[5m])) > 3
+        for: 0m
+        labels:
+          severity: page
+        annotations:
+          summary: "Checkout calls to the payment gateway are timing out"
+          description: "{{ $value }} timeouts in 5 minutes. Customers see a failed checkout."
+
+          runbook: "Loki: {service=\"shop-api\"} | json | error_code=\"upstream_timeout\" ; Tempo: {name=\"payment.charge\"} | duration > 2s"
+  # ---- Dependencies and capacity ----
+  - name: dependencies
+    rules:
+      - alert: DatabasePoolWaiting
+        expr: max by (instance) (shop_db_pool_connections{state="waiting"}) > 2
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: "Requests are queueing for a database connection"
+          description: >
+            Pool exhaustion is almost never the database being slow; it is a
+            dependency holding connections. Check /api/pool-hog and slow queries.
+
+          runbook: "Postgres: SELECT state, count(*) FROM pg_stat_activity GROUP BY state; then /api/pool-hog is the usual cause"
+      - alert: SlowQueryRegression
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, query) (rate(shop_db_query_duration_seconds_bucket[5m]))
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Query {{ $labels.query }} p99 above 500ms"
+          description: "Find the statement in pg_stat_statements and EXPLAIN it."
+
+          runbook: "psql: SELECT calls, mean_exec_time, query FROM pg_stat_statements ORDER BY mean_exec_time DESC LIMIT 10; then EXPLAIN (ANALYZE, BUFFERS)"
+      - alert: TargetDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: page
+        annotations:
+          summary: "{{ $labels.service }} stopped answering scrapes"
+          description: >
+            The single highest-value alert in the stack: it catches crashes,
+            bad deploys and broken metrics wiring before any user-facing
+            symptom does.
+
+          runbook: "docker compose ps, then docker compose logs --since 10m <service>; check OOM in docker inspect .State.OOMKilled"
+      - alert: DiskFillingUp
+        expr: |
+          (
+            node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+            /
+            node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+          ) < 0.15
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Host disk below 15% free"
+          description: "Log and TSDB growth is the usual cause. See docs/17 for the retention levers."
+
+          runbook: "df -h, docker system df, then Loki retention and Prometheus --storage.tsdb.retention.time"
+      # The cardinality guard. Cheap to evaluate, and the only thing that will
+      # warn you before Prometheus runs out of memory.
+      - alert: SeriesCountHigh
+        expr: sum(prometheus_tsdb_head_series) > 60000
+        for: 5m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Active time series above 60k"
+          description: >
+            Run: promtool query series, or topk(10, count by (__name__)
+            ({__name__=~".+"})) to find the offending metric.
+
+          runbook: "Prometheus TSDB status page > top metric by series; /metrics/demo is the usual culprit"
+  # ---- Heartbeat and SLO ----
+  - name: slo
+    rules:
+      # A dead-man's switch: always firing, so Alertmanager silence proves the
+      # pipeline is alive. Route it to a channel nobody reads.
+      - alert: Watchdog
+        expr: vector(1) > 0
+        labels:
+          severity: none
+        annotations:
+          summary: "Heartbeat: alerting pipeline is alive"
+
+          runbook: "If Watchdog has NOT fired in 10m the pipeline is dead: check alertmanager and prometheus containers"
+      # 2% of a 99.9% SLO's budget burned in the last hour, checked over 5m and
+      # 1h. 0.001 is 1 - 0.999: the divisor is the error budget, so changing the
+      # promise means changing this number. Production would use 28d/1h and
+      # 5m/30m windows (Google SRE Workbook chapter 5); 6h of retention here
+      # caps the long window at 1h.
+      - alert: ErrorBudgetBurnFast
+        expr: |
+          (
+            sum(rate(shop_http_request_duration_seconds_count{status_code=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(shop_http_request_duration_seconds_count[5m])), 0.01)
+          ) / 0.001 > 14.4
+          and
+          (
+            sum(rate(shop_http_request_duration_seconds_count{status_code=~"5.."}[1h]))
+            /
+            clamp_min(sum(rate(shop_http_request_duration_seconds_count[1h])), 0.01)
+          ) / 0.001 > 14.4
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "SLO burn rate above 14.4x (2% budget in one hour)"
+          description: "This is the symptom alert. Everything else is detail."
+
+          runbook: "Grafana > SLO dashboard; then ApiHighErrorRatio's Loki query for the failing error.code"

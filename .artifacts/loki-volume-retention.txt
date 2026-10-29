@@ -1,0 +1,44 @@
+=== bytes ingested per stream, last 15m (real cost signal) ===
+   shop-api = 3720.7 KiB
+   payment-gateway = 408.5 KiB
+   otel-collector = 83.2 KiB
+   alloy = 23.8 KiB
+   tempo = 18.0 KiB
+   grafana = 15.2 KiB
+   postgres = 5.4 KiB
+   alert-sink = 0.6 KiB
+=== lines per second per service ===
+   shop-api = 14.26 lines/s
+   payment-gateway = 2.98 lines/s
+   otel-collector = 0.36 lines/s
+   grafana = 0.08 lines/s
+   tempo = 0.07 lines/s
+   postgres = 0.06 lines/s
+   alert-sink = 0.01 lines/s
+   alloy = 0.01 lines/s
+=== streams cardinality ===
+parse error at line 1, col 22: syntax error: unexpected )
+=== per-tenant log volume (checkout funnel) ===
+   tenant_initech = 2000 lines
+   tenant_acme = 1482 lines
+   tenant_globex = 1356 lines
+   tenant_umbrella = 1284 lines
+=== Loki retention + limits (self-reported) ===
+        native_aws_auth_enabled: false
+  enforce_retention_period: false
+  enforce_max_query_series_limit: false
+    native_aws_auth_enabled: false
+      native_aws_auth_enabled: false
+  retention_enabled: true
+  ingestion_rate_mb: 16
+  max_query_series: 5000
+  volume_enabled: true
+  retention_period: 3d
+  retention_period: 0s
+- max_query_series
+=== Loki ring / compactor ===
+=== ruler (per-stream retention API) ===
+{"status":"success","data":{"groups":[]},"errorType":"","error":""}
+HTTP 405
+GetRuleGroup unsupported in rule local store
+

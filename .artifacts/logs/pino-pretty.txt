@@ -1,0 +1,119 @@
+[06:49:00.155] [32mINFO[39m: [36mshop-api listening[39m
+    [35mservice.name[39m: "shop-api"
+    [35mapp.env[39m: "production"
+    [35mapp.release[39m: "1.0.0"
+    [35mnetwork.port[39m: 8000
+    [35mlog_level[39m: "debug"
+    [35mredaction[39m: "on"
+    [35motlp[39m: "http://otel-collector:4318"
+    [35mpool_max[39m: 8
+[06:49:13.109] [34mDEBUG[39m: [36mcatalog listed[39m
+    [35mservice.name[39m: "shop-api"
+    [35mapp.env[39m: "production"
+    [35mapp.release[39m: "1.0.0"
+    [35mrequest_id[39m: "pretty-0001"
+    [35mtenant_id[39m: "tenant_acme"
+    [35mtrace_id[39m: "aafdb63e77e65968c92b6628f0c8e09c"
+    [35mspan_id[39m: "4e1f73b628111404"
+    [35mproduct_count[39m: 20
+[06:49:13.112] [32mINFO[39m: [36mrequest completed[39m
+    [35mservice.name[39m: "shop-api"
+    [35mapp.env[39m: "production"
+    [35mapp.release[39m: "1.0.0"
+    [35mreq[39m: {
+      "id": "pretty-0001",
+      "method": "GET",
+      "url": "/api/products",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "localhost:8011",
+        "user-agent": "curl/8.18.0",
+        "accept": "*/*",
+        "x-tenant-id": "tenant_acme",
+        "x-request-id": "pretty-0001"
+      },
+      "remoteAddress": "::ffff:172.25.0.1",
+      "remotePort": 57732
+    }
+    [35mroute[39m: ""
+    [35mrequest_id[39m: "pretty-0001"
+    [35mtenant_id[39m: "tenant_acme"
+    [35mtrace_id[39m: "aafdb63e77e65968c92b6628f0c8e09c"
+    [35mspan_id[39m: "dcb87f18697d400a"
+    [35mres[39m: {
+      "statusCode": 200,
+      "headers": {
+        "x-request-id": "pretty-0001",
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "2145",
+        "etag": "W/\"861-RHrXUZVG9dN2D434imGMVV684Ys\""
+      }
+    }
+    [35mresponseTime[39m: 30
+[06:49:13.241] [32mINFO[39m: [36mrequest completed[39m
+    [35mservice.name[39m: "shop-api"
+    [35mapp.env[39m: "production"
+    [35mapp.release[39m: "1.0.0"
+    [35mreq[39m: {
+      "id": "pretty-0002",
+      "method": "GET",
+      "url": "/api/slow?ms=120",
+      "query": {
+        "ms": "120"
+      },
+      "params": {},
+      "headers": {
+        "host": "localhost:8011",
+        "user-agent": "curl/8.18.0",
+        "accept": "*/*",
+        "x-tenant-id": "tenant_acme",
+        "x-request-id": "pretty-0002"
+      },
+      "remoteAddress": "::ffff:172.25.0.1",
+      "remotePort": 57744
+    }
+    [35mroute[39m: ""
+    [35mrequest_id[39m: "pretty-0002"
+    [35mtenant_id[39m: "tenant_acme"
+    [35mtrace_id[39m: "eebb7cb2d98bebe476450a82c06050df"
+    [35mspan_id[39m: "729ea0f9c52a24c9"
+    [35mres[39m: {
+      "statusCode": 200,
+      "headers": {
+        "x-request-id": "pretty-0002",
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "16",
+        "etag": "W/\"10-60DZ9Wutb++B88o+oHqVTtVNHzc\""
+      }
+    }
+    [35mresponseTime[39m: 122
+[06:49:13.253] [31mERROR[39m: [36mrequest failed[39m
+    [35mservice.name[39m: "shop-api"
+    [35mapp.env[39m: "production"
+    [35mapp.release[39m: "1.0.0"
+    [35mrequest_id[39m: "pretty-0003"
+    [35mtenant_id[39m: "tenant_acme"
+    [35mtrace_id[39m: "eaa69888a212095978fea860cf68282b"
+    [35mspan_id[39m: "44c26f76ac4fec21"
+    [35merror.name[39m: "TypeError"
+    [35merror.code[39m: "internal_error"
+    [35merror.message[39m: "Cannot read properties of undefined (reading 'length')"
+    [35mhttp.method[39m: "GET"
+    [35mhttp.route[39m: "/api/boom"
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'length')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'length')
+              at <anonymous> (/app/src/routes/debug.ts:26:49)
+              at Layer.handleRequest (/app/node_modules/router/lib/layer.js:152:17)
+              at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:65:14)
+              at AsyncLocalStorageContextManager.with (/app/node_modules/@opentelemetry/context-async-hooks/src/AsyncLocalStorageContextManager.ts:80:36)
+              at ContextAPI.with (/app/node_modules/@opentelemetry/api/src/api/context.ts:81:38)
+              at Layer.wrapped_handle_request (/app/node_modules/@opentelemetry/instrumentation-router/src/instrumentation.ts:114:28)
+              at next (/app/node_modules/router/lib/route.js:157:13)
+              at Route.dispatch (/app/node_modules/router/lib/route.js:117:3)
+              at handle (/app/node_modules/router/index.js:435:11)
+              at Layer.handleRequest (/app/node_modules/router/lib/layer.js:152:17)
+    }

@@ -1,0 +1,262 @@
+name: observability-learn
+
+# Local-only observability playground. Nothing here should be copied to a
+# production system without re-reading the security notes in docs/00-roadmap.md.
+#
+# Host ports are chosen to avoid the ones already busy on this machine
+# (80, 443, 3000, 6380, 8080, 8443): see docs/00-roadmap.md for the full map.
+
+x-app-env: &app-env
+  NODE_ENV: production
+  DATABASE_URL: postgres://shop:shop@postgres:5432/shop
+  PAYMENT_SERVICE_URL: http://payment-gateway:8020/charge
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_TRACES_EXPORTER: otlp
+  OTEL_METRICS_EXPORTER: "none"
+  OTEL_LOGS_EXPORTER: "none"
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=local,service.namespace=shop
+  LOG_PRETTY: "false"
+  LOG_REDACT: "true"
+  SLOW_QUERY_MS: "100"
+  APP_RELEASE: "1.0.0"
+
+services:
+  postgres:
+    image: postgres:18.6
+    environment:
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: shop
+      POSTGRES_DB: shop
+    command:
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=top
+      - -c
+      - pg_stat_statements.max=10000
+      # Every SQL statement slower than 100ms goes to the Postgres log, which
+      # is the raw material for docs/14-database-monitoring.md. Note the trap
+      # here: a comment placed *between* "- -c" and its value silently creates
+      # two -c flags in a row, and Postgres refuses to start with
+      # `FATAL: -c -c requires a value`. Keep each pair adjacent.
+      - -c
+      - log_min_duration_statement=100
+      - -c
+      - log_statement_sample_rate=1.0
+      - -c
+      # The trailing space matters and needs quoting, because YAML strips an
+      # unquoted one. Without it Postgres wrote "shop] shopLOG:  duration: ..."
+      # — database name glued to the message level, which breaks anything that
+      # splits a log line on "LOG:".
+      - "log_line_prefix=%m [%p %u] %d "
+    volumes:
+      # Postgres 18+ images changed this layout: the volume now goes on
+      # /var/lib/postgresql, and mounting the old /var/lib/postgresql/data path
+      # makes the container refuse to start. Many pre-18 tutorials are wrong.
+      - postgres_data:/var/lib/postgresql
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5433:5432"
+    mem_limit: 384m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shop -d shop"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Named after the application, not "api", so that the Loki `service` label
+  # derived from the compose service name matches the Prometheus `service`
+  # label in prometheus.yml. Mismatched names across logs and metrics is one of
+  # the most common ways a first incident investigation goes sideways.
+  shop-api:
+    image: node:24.22.2-slim
+    working_dir: /app
+    # Bind-mounted source + a named volume for node_modules: edit on the host,
+    # restart-free reload via tsx watch, and no 400MB of modules copied per build.
+    volumes:
+      - ./app:/app
+      - app_modules:/app/node_modules
+    command: ["sh", "-c", "./docker-entry.sh && ./node_modules/.bin/tsx --import ./src/instrumentation.ts src/server.ts"]
+    environment:
+      <<: *app-env
+      PORT: "8000"
+      OTEL_SERVICE_NAME: shop-api
+      LOG_LEVEL: "info"
+      IDENTITY_HASH_SECRET: dev-only-insecure-secret
+      LOG_DANGER: "1"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 320m
+
+  payment-gateway:
+    image: node:24.22.2-slim
+    working_dir: /app
+    volumes:
+      - ./app:/app
+      - app_modules:/app/node_modules
+    command: ["sh", "-c", "./docker-entry.sh && ./node_modules/.bin/tsx --import ./src/instrumentation.ts src/payment-service.ts"]
+    environment:
+      <<: *app-env
+      PORT: "8020"
+      OTEL_SERVICE_NAME: payment-gateway
+      LOG_LEVEL: "info"
+    ports:
+      - "8020:8020"
+    mem_limit: 256m
+
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 6h is enough for a learning stack; 15d is the usual production default.
+      - --storage.tsdb.retention.time=6h
+      # Tempo's metrics generator remote-writes here, which needs this on.
+      - --web.enable-remote-write-receiver
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    mem_limit: 512m
+
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    ports:
+      - "9093:9093"
+    mem_limit: 128m
+
+  # Local stand-in for PagerDuty/Slack. Prints Alertmanager payloads as JSON
+  # log lines, which then arrive in Loki like everything else.
+  alert-sink:
+    image: node:24.22.2-slim
+    working_dir: /sink
+    volumes:
+      - ./tools:/sink:ro
+    command: ["node", "alert-sink.mjs"]
+    environment:
+      PORT: "8090"
+    ports:
+      - "8090:8090"
+    mem_limit: 48m
+
+  loki:
+    image: grafana/loki:3.7.9
+    command: -config.file=/etc/loki/config.yaml
+    volumes:
+      - ./loki/config.yaml:/etc/loki/config.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "3101:3100"
+    mem_limit: 640m
+
+  tempo:
+    image: grafana/tempo:3.1.1
+    command: -config.file=/etc/tempo/config.yaml
+    volumes:
+      - ./tempo/config.yaml:/etc/tempo/config.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3201:3200" # query API, used by Grafana Explore
+      - "4320:4317" # OTLP gRPC, if you want to send spans straight to Tempo
+    mem_limit: 512m
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./otel/config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "9464:9464" # metrics the collector hands back to Prometheus
+      - "13133:13133" # collector health check
+    mem_limit: 256m
+
+  alloy:
+    image: grafana/alloy:v1.19.2
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
+    environment:
+      ALLOY_DEPLOY_MODE: docker
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "12345:12345"
+    mem_limit: 192m
+
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    ports:
+      - "9100:9100"
+    mem_limit: 64m
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "8081:8080"
+    mem_limit: 192m
+    privileged: true
+    devices:
+      - /dev/kmsg
+
+  grafana:
+    image: grafana/grafana:13.3.0
+    environment:
+      # Dev-only credentials. In production these come from a secret store,
+      # and anonymous access stays off.
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    mem_limit: 384m
+
+volumes:
+  postgres_data:
+  app_modules:
+  prometheus_data:
+  loki_data:
+  tempo_data:
+  grafana_data:
+  alertmanager_data:

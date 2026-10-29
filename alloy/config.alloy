@@ -1,0 +1,122 @@
+// Grafana Alloy v1.19: the modern replacement for Promtail (now in long-term
+// support). This pipeline tails Docker logs for our compose project only,
+// adds a couple of safe labels, and pushes to Loki.
+//
+// The labels below are the whole stream design. Keep them bounded: `service`
+// and `level` have a handful of possible values. request_id and customer_hash
+// are infinite, so they stay log *lines*, never labels. See docs/06a and 07b.
+
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "project_only" {
+  targets = discovery.docker.containers.targets
+
+  // Only our stack. Without this rule you would also ingest the logs of every
+  // other project running on this Docker daemon.
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = "observability-learn"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  // Three ways I tried to remove the duplicate `service_name` label. All three
+  // were tested against the running stack; none of them work, so the config now
+  // keeps the label and docs/09b explains the cost. Recorded here so nobody
+  // re-invents them:
+  //
+  //   1. rule { source_labels = ["__meta_docker_container_id"]
+  //             action = "labeldrop" regex = ".+" }
+  //      -> Alloy refuses to start: "labeldrop action requires only 'regex',
+  //         and no other fields". labeldrop matches label NAMES, so it takes no
+  //         source_labels.
+  //   2. rule { action = "labeldrop" regex = "service_name" }  (valid syntax)
+  //      -> Alloy starts, the rule is accepted, `service_name` is still on every
+  //         stream. discovery.relabel runs BEFORE loki.source.docker, which adds
+  //         service_name itself afterwards. Nothing here can see it yet.
+  //   3. stage.labeldrop { values = ["service_name"] } inside loki.process,
+  //      tried both after stage.labels and as the very first stage.
+  //      -> Accepted, still present. Loki's labeldrop only removes labels that
+  //         LATER pipeline stages add; it cannot remove labels the entry
+  //         arrived with, and position matters.
+  //
+  // Also note `compose_version` disappeared after `docker compose restart alloy`
+  // while the streams that were created earlier still carry it. Loki stream
+  // labels are frozen at ingestion: a pipeline change never rewrites old
+  // streams, so you see two label schemes at once during a rollout. Query the
+  // last few minutes when testing a label change, not the default 15m window.
+}
+
+loki.source.docker "app" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.project_only.output
+  forward_to = [loki.process.app.receiver]
+}
+
+loki.process "app" {
+  forward_to = [loki.write.loki.receiver]
+
+  // Pino writes JSON. Pull two bounded fields out of the payload so Loki can
+  // filter them without scanning every line; everything else stays as text.
+  // Both are safe as labels: `level` has 6 values, `tenant_id` has 4 + unknown.
+  stage.json {
+    expressions = {
+      level     = "level",
+      tenant_id = "tenant_id",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level     = "",
+      tenant_id = "",
+    }
+  }
+
+  // KNOWN DUPLICATE: every stream carries both `service` (set at the top of this
+  // file from the compose service label) and `service_name` (added by
+  // loki.source.docker itself), with the same value. Queries always use
+  // `service`, so there is no ambiguity for the reader; the cost is one extra
+  // bounded label. The three ways to remove it, and why each one failed, are
+  // recorded at the top of this file. Do not call this tidy: it is a known wart,
+  // discussed in docs/09b.
+
+  // `detected_level` is kept on purpose: for non-JSON lines (the infrastructure
+  // containers) the json stage above produces nothing, and Loki's auto-detected
+  // level is the only level label those streams have.
+
+  // Non-JSON lines (the infrastructure containers speak plain text) make the
+  // json stage fail quietly. Keep them, but mark them so a query can exclude
+  // the noise instead of the pipeline dropping the line.
+  stage.match {
+    selector = "{service!~\"shop-api|payment-gateway\"}"
+    stage.labels {
+      values = {
+        structured = "false",
+      }
+    }
+  }
+}
+
+loki.write "loki" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

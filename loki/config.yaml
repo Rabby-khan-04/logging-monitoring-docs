@@ -1,0 +1,84 @@
+# Loki 3.7 single binary, filesystem storage, short retention.
+# Sized for a laptop: this is a learning stack, not a 90-day audit store.
+auth_enabled: false
+
+server:
+  http_listen_address: 0.0.0.0
+  http_listen_port: 3100
+  grpc_listen_port: 9095
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: "2024-06-01"
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # The single most important cost dial in a log stack. Loki keeps everything
+  # until the compactor deletes it, and disk is only half the bill: query time
+  # grows with retention too.
+  retention_period: 72h
+  # VERIFIED against Loki 3.7.9, two ways. The accepted fields are `priority`,
+  # `priority_label`, `selector` and `period` (there is no `retention` field, and
+  # older tutorials naming one are wrong). And `period` has a floor: setting 6h
+  # made the whole container refuse to start with
+  #   CONFIG ERROR: invalid limits_config config: retention period must be >= 24h was 6h
+  # because deletes can only happen on wall boundaries. Cheapest legal rule:
+  retention_stream:
+    - priority: 1
+      selector: '{service="shop-api", tenant_id="tenant_umbrella"}'
+      period: 24h
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  ingestion_rate_strategy: local
+  ingestion_rate_mb: 16
+  ingestion_burst_size_mb: 32
+  max_global_streams_per_user: 10000
+  max_query_series: 5000
+  max_query_parallelism: 2
+  volume_enabled: true
+
+compactor:
+  working_directory: /loki/compactor
+  # Without this line, retention_period is decoration: nothing gets deleted.
+  retention_enabled: true
+  delete_request_store: filesystem
+  compaction_interval: 5m
+
+ruler:
+  # Verified against Loki 3.7.9: `storage.local.path` does not exist. Leaving
+  # `storage` out makes the ruler inherit common.storage.filesystem, which is
+  # what you want on a single-binary install.
+  rule_path: /loki/rules-temp
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true
+
+query_range:
+  parallelise_shardable_queries: false
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 64
+
+analytics:
+  reporting_enabled: false

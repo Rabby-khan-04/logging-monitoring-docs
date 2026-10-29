@@ -1,0 +1,38 @@
+=== Postgres log: statements over log_min_duration_statement=100ms ===
+postgres-1  | 2026-10-29 06:51:29.272 UTC [77 ] LOG:  checkpoint starting: time
+postgres-1  | 2026-10-29 06:51:32.802 UTC [77 ] LOG:  checkpoint complete: wrote 35 buffers (0.2%), wrote 2 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=3.511 s, sync=0.012 s, total=3.531 s; sync files=17, longest=0.003 s, average=0.001 s; distance=347 kB, estimate=11192 kB; lsn=0/540DF98, redo lsn=0/540DF40
+postgres-1  | 2026-10-29 06:56:23.443 UTC [4653 shop] shopLOG:  duration: 187.780 ms  statement: CREATE INDEX idx_order_items_order_id ON order_items (order_id); ANALYZE order_items;
+postgres-1  | 2026-10-29 06:56:29.903 UTC [77 ] LOG:  checkpoint starting: time
+postgres-1  | 2026-10-29 06:56:34.833 UTC [77 ] LOG:  checkpoint complete: wrote 49 buffers (0.3%), wrote 1 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=4.916 s, sync=0.009 s, total=4.931 s; sync files=36, longest=0.004 s, average=0.001 s; distance=1615 kB, estimate=10234 kB; lsn=0/55B3010, redo lsn=0/55A1DB0
+postgres-1  | 2026-10-29 06:56:43.743 UTC [4724 shop] shopLOG:  duration: 177.986 ms  statement: CREATE INDEX idx_order_items_order_id ON order_items (order_id); ANALYZE order_items;
+=== connection counts by state ===
+ state  | count 
+--------+-------
+ active |     1
+ idle   |     1
+(2 rows)
+
+=== max_connections and usage ===
+ max_connections 
+-----------------
+ 100
+(1 row)
+
+ used=10 of max=100
+
+=== db statistics: cache hit ratio, commits vs rollbacks ===
+ cache_hit_pct | xact_commit | xact_rollback | deadlocks | temp_files 
+---------------+-------------+---------------+-----------+------------
+         99.80 |        7055 |             1 |         0 |          4
+(1 row)
+
+=== table sizes ===
+   relname   | n_live_tup |  total  
+-------------+------------+---------
+ order_items |     168953 | 16 MB
+ orders      |      12470 | 3968 kB
+ payments    |      12424 | 2320 kB
+ products    |        160 | 104 kB
+ tenants     |          4 | 32 kB
+(5 rows)
+

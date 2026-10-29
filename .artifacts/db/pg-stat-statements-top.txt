@@ -1,0 +1,3 @@
+ERROR:  column "total_exec_calls" does not exist
+LINE 1: SELECT round(total_exec_calls) AS calls, round(mean_exec_tim...
+                     ^

@@ -1,0 +1,68 @@
+global:
+  # How long Alertmanager waits before deciding an alert has resolved when the
+  # source stops sending it. Longer than the scrape interval, always.
+  resolve_timeout: 2m
+
+route:
+  receiver: default
+  # Grouping is what keeps one bad deploy from becoming 40 notifications:
+  # everything with the same alertname and tenant becomes a single group.
+  group_by: ["alertname", "tenant_id"]
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 2h
+
+  routes:
+    - matchers:
+        - severity = "page"
+      receiver: on-call
+      group_wait: 5s
+      group_interval: 15s
+      repeat_interval: 30m
+
+    - matchers:
+        - severity = "none"
+      receiver: heartbeat
+      # The watchdog repeats forever by design; nobody reads this channel.
+
+receivers:
+  - name: default
+    webhook_configs:
+      - url: http://alert-sink:8090/ingest?channel=default
+        send_resolved: true
+
+  - name: on-call
+    webhook_configs:
+      - url: http://alert-sink:8090/ingest?channel=oncall
+        send_resolved: true
+    # Replace with email_configs / slack_configs / pagerduty_configs in
+    # production. Those need credentials, so they stay out of this repo.
+
+  - name: heartbeat
+    webhook_configs:
+      - url: http://alert-sink:8090/ingest?channel=heartbeat
+        send_resolved: false
+
+inhibit_rules:
+  # If a target is down, every symptom alert about that same service is noise:
+  # suppressing them is the difference between one page and twelve.
+  - source_matchers:
+      - alertname = "TargetDown"
+    target_matchers:
+      - severity = "page"
+    equal: ["service"]
+
+  # A disk problem explains the latency and error alerts on the host too.
+  - source_matchers:
+      - alertname = "DiskFillingUp"
+    target_matchers:
+      - severity = "warn"
+    equal: []
+
+time_intervals:
+  - name: office-hours
+    time_intervals:
+      - times:
+          - start_time: "09:00"
+            end_time: "18:00"
+        location: Europe/Berlin

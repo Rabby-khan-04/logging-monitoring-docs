@@ -1,0 +1,12 @@
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ Seq Scan on order_items oi  (cost=0.00..3690.00 rows=14 width=30) (actual time=3.141..9.068 rows=12.00 loops=1)
+   Filter: (order_id = 4321)
+   Rows Removed by Filter: 168904
+   Buffers: shared hit=1579
+ Planning:
+   Buffers: shared hit=69 dirtied=1
+ Planning Time: 0.579 ms
+ Execution Time: 9.103 ms
+(8 rows)
+

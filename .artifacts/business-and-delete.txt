@@ -1,0 +1,50 @@
+=== Loki delete API (tombstones) ===
+could not find delete request with given id
+
+HTTP 404
+=== delete request status ===
+[]
+
+HTTP 200
+=== probe line still visible? ===
+{"status":"success","data":{"resultType":"streams","result":[{"stream":{"detected_level":"info","level":"info","service":"probe","service_name":"probe"},"values":[["1793257706000000000","hello-from-ca
+=== BUSINESS METRICS ===
+### sum by (tenant_id) (rate(shop_checkout_step_total[5m]))
+    {"tenant_id": "tenant_acme"} = 0
+    {"tenant_id": "tenant_initech"} = 0
+    {"tenant_id": "tenant_umbrella"} = 0
+    {"tenant_id": "tenant_globex"} = 0
+### sum by (tenant_id, outcome) (rate(shop_checkout_outcome_total[5m]))
+    {"outcome": "captured", "tenant_id": "tenant_acme"} = 0
+    {"outcome": "captured", "tenant_id": "tenant_initech"} = 0
+    {"outcome": "captured", "tenant_id": "tenant_umbrella"} = 0
+    {"outcome": "captured", "tenant_id": "tenant_globex"} = 0
+    {"outcome": "declined", "tenant_id": "tenant_initech"} = 0
+    {"outcome": "declined", "tenant_id": "tenant_acme"} = 0
+### sum by (tenant_id) (rate(shop_payment_failures_total[5m]))
+    {"tenant_id": "tenant_initech"} = 0
+    {"tenant_id": "tenant_acme"} = 0
+    {"tenant_id": "tenant_umbrella"} = 0
+    {"tenant_id": "tenant_globex"} = 0
+### sum by (tenant_id) (rate(shop_order_value_cents_total[5m])) / 100
+    {"tenant_id": "tenant_acme"} = 0
+    {"tenant_id": "tenant_initech"} = 0
+    {"tenant_id": "tenant_umbrella"} = 0
+    {"tenant_id": "tenant_globex"} = 0
+### shop_orders_in_flight
+    {"__name__": "shop_orders_in_flight", "instance": "shop-api:8000", "job": "shop-api", "ser = 0
+    {"__name__": "shop_orders_in_flight", "instance": "shop-api:8000", "job": "shop-api", "ser = 0
+    {"__name__": "shop_orders_in_flight", "instance": "shop-api:8000", "job": "shop-api", "ser = 0
+    {"__name__": "shop_orders_in_flight", "instance": "shop-api:8000", "job": "shop-api", "ser = 0
+### sum by (step) (rate(shop_checkout_step_total[10m]))
+    {"step": "cart_received"} = 1.2888888888
+    {"step": "validated"} = 1.2888888888
+    {"step": "basket_priced"} = 1.2888888888
+    {"step": "order_created"} = 1.2888888888
+    {"step": "payment_attempted"} = 1.2888888888
+    {"step": "payment_captured"} = 0.6170940170
+=== TEMPO SERVICE GRAPH (metrics-generator) ===
+404 page not found
+
+HTTP 404
+

@@ -1,0 +1,67 @@
+=== up / targets ===
+### count(up == 1)
+  series: 1
+    {} = 11
+### count(up == 0)
+  series: 0
+=== RED: rate ===
+### sum(rate(shop_http_requests_total[5m]))
+  series: 1
+    {} = 0.1644943999
+### sum by (tenant_id) (rate(shop_http_requests_total[5m]))
+  series: 1
+    {} = 0.1644981333
+=== errors ===
+### sum(rate(shop_http_errors_total[5m]))
+  series: 0
+### shop:http_5xx_ratio:5m
+  series: 0
+=== latency percentiles ===
+### histogram_quantile(0.50, sum by (le) (rate(shop_http_request_duration_seconds_bucket[5m])))
+  series: 1
+    {} = 0.0025617411
+### histogram_quantile(0.95, sum by (le) (rate(shop_http_request_duration_seconds_bucket[5m])))
+  series: 1
+    {} = 0.0048673191
+### histogram_quantile(0.99, sum by (le) (rate(shop_http_request_duration_seconds_bucket[5m])))
+  series: 1
+    {} = 0.0187774882
+### sum(rate(shop_http_request_duration_seconds_sum[5m])) / sum(rate(shop_http_request_duration_seconds_count[5m]))
+  series: 1
+    {} = 0.0015954907
+=== p95 per tenant ===
+### histogram_quantile(0.95, sum by (le, tenant_id) (rate(shop_http_request_duration_seconds_bucket[5m])))
+  series: 4
+    {"tenant_id": "tenant_acme"} = NaN
+    {"tenant_id": "tenant_umbrella"} = NaN
+    {"tenant_id": "tenant_globex"} = 0.02275
+    {"tenant_id": "none"} = 0.0047499999
+=== in-flight gauge ===
+### shop_orders_in_flight
+  series: 0
+=== db pool ===
+### shop_db_pool_connections
+  series: 3
+    {"__name__": "shop_db_pool_connections", "instance": "shop-api:8000", "job": "shop-api", "service": "shop-api" = 0
+    {"__name__": "shop_db_pool_connections", "instance": "shop-api:8000", "job": "shop-api", "service": "shop-api" = 0
+    {"__name__": "shop_db_pool_connections", "instance": "shop-api:8000", "job": "shop-api", "service": "shop-api" = 0
+=== build info ===
+### shop_build_info
+  series: 1
+    {"__name__": "shop_build_info", "environment": "production", "instance": "shop-api:8000", "job": "shop-api", " = 1
+=== cardinality ===
+### prometheus_tsdb_head_series
+  series: 1
+    {"__name__": "prometheus_tsdb_head_series", "instance": "localhost:9090", "job": "prometheus", "service": "pro = 20736
+### count by (job) (up)
+  series: 11
+    {"job": "otel-collector"} = 1
+    {"job": "payment-gateway"} = 1
+    {"job": "grafana"} = 1
+    {"job": "tempo"} = 1
+    {"job": "cadvisor"} = 1
+    {"job": "loki"} = 1
+=== recording rules present ===
+### count({__name__=~"shop:.*"})
+  series: 1
+    {} = 4

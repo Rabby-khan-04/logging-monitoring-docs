@@ -1,0 +1,2 @@
+loadgen: 420s @ ~12 req/s against http://localhost:8000 for 4 tenant(s)
+loadgen: finished, 2406 requests sent

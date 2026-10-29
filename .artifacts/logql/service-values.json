@@ -1,0 +1,1 @@
+{"status":"success","data":["alert-sink","alertmanager","alloy","api","cadvisor","grafana","loki","node-exporter","otel-collector","payment-gateway","postgres","prometheus","shop-api","tempo"]}

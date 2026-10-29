@@ -1,0 +1,16 @@
+=== which tempo-generated series exist ===
+traces_*: ['traces_service_graph_request_client_seconds_bucket', 'traces_service_graph_request_client_seconds_count', 'traces_service_graph_request_client_seconds_sum', 'traces_service_graph_request_failed_total', 'traces_service_graph_request_server_seconds_bucket', 'traces_service_graph_request_server_seconds_count', 'traces_service_graph_request_server_seconds_sum', 'traces_service_graph_request_total', 'traces_spanmetrics_calls_total', 'traces_spanmetrics_latency_bucket', 'traces_spanmetrics_latency_count', 'traces_spanmetrics_latency_sum', 'traces_spanmetrics_size_total']
+spanmetrics: ['traces_spanmetrics_calls_total', 'traces_spanmetrics_latency_bucket', 'traces_spanmetrics_latency_count', 'traces_spanmetrics_latency_sum', 'traces_spanmetrics_size_total']
+=== SERVICE GRAPH edges ===
+   shop-api -> postgres = 7.684 req/s
+   user -> shop-api = 1.632 req/s
+   shop-api -> payment-gateway = 0.435 req/s
+   user -> payment-gateway = 0.065 req/s
+=== graph error ratio per edge ===
+   shop-api -> payment-gateway = 0.2126
+   user -> shop-api = 0.085
+   shop-api -> postgres = 0.0
+=== spanmetrics p95 per service (from tempo) ===
+   None = 0.4 ms
+=== exemplars present? (metrics -> traces link) ===
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1793257853.438,"23.09816810621726"]}]}}

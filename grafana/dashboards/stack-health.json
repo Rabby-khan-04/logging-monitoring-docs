@@ -1,0 +1,336 @@
+{
+  "uid": "stack-health",
+  "title": "00 - Stack health",
+  "tags": ["learning", "starter"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "kind": "annotations",
+        "hide": false,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "enable": true,
+        "type": "dashboard"
+      }
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "tenant",
+        "type": "query",
+        "label": "Tenant",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(shop_http_request_duration_seconds_count, tenant_id)",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "route",
+        "type": "query",
+        "label": "Route",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(shop_http_request_duration_seconds_count{tenant_id=~\"$tenant\"}, route)",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Scrape targets up",
+      "id": 1,
+      "gridPos": { "h": 5, "w": 5, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 10 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "count(up == 1)", "instant": true }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Request rate (RED: Rate)",
+      "id": 2,
+      "gridPos": { "h": 8, "w": 12, "x": 5, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (tenant_id) (rate(shop_http_request_duration_seconds_count{tenant_id=~\"$tenant\"}[5m]))",
+          "legendFormat": "{{tenant_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "5xx ratio (RED: Errors)",
+      "id": 3,
+      "gridPos": { "h": 8, "w": 7, "x": 17, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.01 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "shop:http_5xx_ratio:5m{tenant_id=~\"$tenant\"}",
+          "legendFormat": "{{tenant_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "p50 / p95 / p99 latency (RED: Duration)",
+      "id": 4,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(shop_http_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(shop_http_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[5m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(shop_http_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[5m])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Latest errors (Loki)",
+      "id": 5,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "showTimePart": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "query": "{service=\"shop-api\", level=\"error\"} | json",
+          "maxLines": 50
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Request rate by route (Rate)",
+      "description": "Which endpoint is carrying the traffic. Scrape-noise routes are filtered out so the graph is about users, not probes.",
+      "id": 6,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (route) (rate(shop_http_request_duration_seconds_count{tenant_id=~\"$tenant\", route=~\"$route\", route!~\"/metrics|/metrics/demo|/readyz|/healthz\"}[5m]))",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "5xx ratio by route (Errors)",
+      "description": "Clamped denominator: a route with no traffic shows ~0% instead of NaN, so a dead route cannot look like a healthy one and a live one cannot look broken.",
+      "id": 7,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "max": 0.05,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.01 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (route) (rate(shop_http_request_duration_seconds_count{status_code=~\"5..\", tenant_id=~\"$tenant\", route=~\"$route\"}[5m])) / clamp_min(sum by (route) (rate(shop_http_request_duration_seconds_count{tenant_id=~\"$tenant\", route=~\"$route\"}[5m])), 0.01)",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "p95 by route (Duration)",
+      "description": "Latency per endpoint, never averaged across endpoints: /api/slow and /api/products in one graph would hide each other.",
+      "id": 8,
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(shop_http_request_duration_seconds_bucket{tenant_id=~\"$tenant\", route=~\"$route\", route!~\"/metrics|/metrics/demo\"}[5m])))",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Checkout funnel (last 5m)",
+      "description": "Each step counted per 5m. When a line drops off the one above it, that is where customers leave.",
+      "id": 9,
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (step) (rate(shop_checkout_step_total{tenant_id=~\"$tenant\"}[5m]))",
+          "legendFormat": "{{step}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (outcome) (rate(shop_checkout_outcome_total{tenant_id=~\"$tenant\"}[5m]))",
+          "legendFormat": "outcome: {{outcome}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Payment gateway p95 by outcome",
+      "description": "The upstream hop. Slow-but-successful shows here before it shows in the API's own latency.",
+      "id": 10,
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(shop_payment_provider_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Process health: DB pool and event loop",
+      "description": "Two different units on one panel, so the right-hand series uses a second axis. Waiting pool connections are a symptom; event loop lag means the Node process itself is the bottleneck.",
+      "id": 11,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": [
+          {
+            "id": "byFrameRefID",
+            "options": { "byName": "event loop lag (s)" },
+            "properties": [
+              { "id": "unit", "value": "s" },
+              { "id": "custom.axisPlacement", "value": "right" }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "shop_db_pool_connections{tenant_id=~\"$tenant\"}",
+          "legendFormat": "pool: {{state}}"
+        },
+        {
+          "refId": "B",
+          "expr": "shop_nodejs_eventloop_lag_p99_seconds",
+          "legendFormat": "event loop lag (s)"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Per-tenant scorecard (last 5m)",
+      "description": "One row per tenant: rate, 5xx ratio, p95. This is the panel you read first when someone says \"is it just us?\"",
+      "id": 12,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": { "byField": "tenant_id", "mode": "outer" }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time 1": true, "Time 2": true, "Time 3": true, "__name__ 1": true, "__name__ 2": true, "__name__ 3": true, "service 2": true, "service 3": true },
+            "renameByName": {
+              "Value #A": "req/s",
+              "Value #B": "5xx ratio",
+              "Value #C": "p95 (s)"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "refId": "A",
+          "instant": true,
+          "expr": "sum by (tenant_id) (rate(shop_http_request_duration_seconds_count{tenant_id=~\"$tenant\"}[5m]))",
+          "legendFormat": ""
+        },
+        {
+          "refId": "B",
+          "instant": true,
+          "expr": "shop:http_5xx_ratio:5m{tenant_id=~\"$tenant\"}",
+          "legendFormat": ""
+        },
+        {
+          "refId": "C",
+          "instant": true,
+          "expr": "histogram_quantile(0.95, sum by (le, tenant_id) (rate(shop_http_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[5m])))",
+          "legendFormat": ""
+        }
+      ]
+    }
+  ]
+}

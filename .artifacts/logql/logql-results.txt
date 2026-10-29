@@ -1,0 +1,74 @@
+=== 1 label names ===
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json;print(json.load(open('.artifacts/logql/label-names.json'))['data'])
+                      ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/json/__init__.py", line 298, in load
+    return loads(fp.read(),
+        cls=cls, object_hook=object_hook,
+        parse_float=parse_float, parse_int=parse_int,
+        parse_constant=parse_constant, object_pairs_hook=object_pairs_hook, **kw)
+  File "/usr/lib/python3.14/json/__init__.py", line 352, in loads
+    return _default_decoder.decode(s)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/usr/lib/python3.14/json/decoder.py", line 348, in decode
+    raise JSONDecodeError("Extra data", s, end)
+json.decoder.JSONDecodeError: Extra data: line 1 column 5 (char 4)
+=== 2 service values ===
+['alert-sink', 'alertmanager', 'alloy', 'api', 'cadvisor', 'grafana', 'loki', 'node-exporter', 'otel-collector', 'payment-gateway', 'postgres', 'prometheus', 'shop-api', 'tempo']
+=== 3 level values ===
+['error', 'info', 'warn']
+=== 4 stream selector ===
+### query: {service="shop-api"}
+streams= 1
+  labels= {"compose_version": "5.6.1", "container": "observability-learn-shop-api-1", "detected_level": "info", "level": "info", "service": "shop-api", "service_name": "shop-api", "tenant_id": "tenant_acme"}
+    1793256506854318678 {"level":"info","time":"2026-10-29T06:48:26.852Z","service.name":"shop-api","app.env":"production","app.release":"1.0.0","req":{"id":"safe-0002","method":"POST","url":"/danger/logi
+    1793256506854287193 {"level":"info","time":"2026-10-29T06:48:26.848Z","service.name":"shop-api","app.env":"production","app.release":"1.0.0","request_id":"safe-0002","tenant_id":"tenant_acme","trace_i
+=== 5 level filter ===
+### query: {service="shop-api", level="error"}
+streams= 1
+  labels= {"compose_version": "5.6.1", "container": "observability-learn-shop-api-1", "detected_level": "error", "level": "error", "service": "shop-api", "service_name": "shop-api", "tenant_id": "tenant_acme"}
+    1793256251507475402 {"level":"error","time":"2026-10-29T06:44:11.506Z","service.name":"shop-api","app.env":"production","app.release":"1.0.0","request_id":"capB-err-03","tenant_id":"tenant_acme","trac
+    1793256032278515949 {"level":"error","time":"2026-10-29T06:40:32.277Z","service.name":"shop-api","app.env":"production","app.release":"1.0.0","req":{"id":"cap-err-0005","method":"GET","url":"/api/boom
+=== 6 line filter contains ===
+### query: {service="shop-api"} |= "payment declined"
+streams= 2
+  labels= {"compose_version": "5.6.1", "container": "observability-learn-shop-api-1", "detected_level": "warn", "level": "warn", "service": "shop-api", "service_name": "shop-api", "tenant_id": "tenant_initech"}
+    1793256486618071764 {"level":"warn","time":"2026-10-29T06:48:06.617Z","service.name":"shop-api","app.env":"production","app.release":"1.0.0","request_id":"loadgen-1793256486-904","tenant_id":"tenant_i
+  labels= {"compose_version": "5.6.1", "container": "observability-learn-shop-api-1", "detected_level": "warn", "level": "warn", "service": "shop-api", "service_name": "shop-api", "tenant_id": "tenant_umbrella"}
+    1793256488808457913 {"level":"warn","time":"2026-10-29T06:48:08.808Z","service.name":"shop-api","app.env":"production","app.release":"1.0.0","request_id":"loadgen-1793256488-916","tenant_id":"tenant_u
+=== 7 json parser + expression ===
+### query: {service="shop-api"} | json | tenant_id="tenant_initech" | level="error"
+streams= 0
+=== 8 log rate metric ===
+### query: rate({service="shop-api", level="error"} [5m])
+Traceback (most recent call last):
+  File "<string>", line 7, in <module>
+    print('  labels=',json.dumps(s['stream']))
+                                 ~^^^^^^^^^^
+KeyError: 'stream'
+streams= 2
+=== 9 count per tenant via unwrap ===
+### query: sum by (tenant_id) (count_over_time({service="shop-api"} | json | unwrap duration_ms [5m]))
+Traceback (most recent call last):
+  File "<string>", line 3, in <module>
+    d=json.load(sys.stdin)
+  File "/usr/lib/python3.14/json/__init__.py", line 298, in load
+    return loads(fp.read(),
+        cls=cls, object_hook=object_hook,
+        parse_float=parse_float, parse_int=parse_int,
+        parse_constant=parse_constant, object_pairs_hook=object_pairs_hook, **kw)
+  File "/usr/lib/python3.14/json/__init__.py", line 352, in loads
+    return _default_decoder.decode(s)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/usr/lib/python3.14/json/decoder.py", line 345, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/json/decoder.py", line 363, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+=== 10 trace_id lookup ===
+### query: {service="shop-api"} | json | trace_id!=""
+streams= 1
+  labels= {"app_env": "production", "app_release": "1.0.0", "compose_version": "5.6.1", "container": "observability-learn-shop-api-1", "detected_level": "info", "level": "info", "level_extracted": "info", "msg": "request completed", "req_headers_accept": "*/*", "req_headers_authorization": "[REDACTED]", "req_headers_content_length": "147", "req_headers_content_type": "application/json", "req_headers_host": "localhost:8000", "req_headers_user_agent": "curl/8.18.0", "req_headers_x_request_id": "safe-0002", "req_headers_x_tenant_id": "tenant_acme", "req_id": "safe-0002", "req_method": "POST", "req_remoteAddress": "::ffff:172.25.0.1", "req_remotePort": "57776", "req_url": "/danger/login", "request_id": "safe-0002", "res_headers_content_length": "19", "res_headers_content_type": "application/json; charset=utf-8", "res_headers_etag": "W/\"13-AmooA5OnMEh8iMfUQ0ZRl4fKgtE\"", "res_headers_x_request_id": "safe-0002", "res_statusCode": "200", "responseTime": "7", "route": "", "service": "shop-api", "service_name": "shop-api", "service_name_extracted": "shop-api", "span_id": "b63fd3fa1c17dfc6", "tenant_id": "tenant_acme", "tenant_id_extracted": "tenant_acme", "time": "2026-10-29T06:48:26.852Z", "trace_id": "b05c2c344cbab3c1304ab199fe9ca704"}
+    1793256506854318678 {"level":"info","time":"2026-10-29T06:48:26.852Z","service.name":"shop-api","app.env":"production","app.release":"1.0.0","req":{"id":"safe-0002","method":"POST","url":"/danger/logi

@@ -1,0 +1,76 @@
+# OpenTelemetry Collector (contrib) 0.164.0
+# One entry point for telemetry from the app (OTLP over HTTP), one exit point
+# per signal: traces to Tempo, metrics back to Prometheus, logs to the debug
+# exporter (Pino writes logs straight to stdout -> Alloy -> Loki instead).
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Guards the container against its own buffer: better to drop spans than to
+  # be OOM-killed and take the whole pipeline down with you.
+  memory_limiter:
+    check_interval: 2s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+  batch:
+    send_batch_size: 512
+    timeout: 2s
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  prometheus:
+    # 8888 is already taken inside this container by the collector's own
+    # internal telemetry, so the exporter that Prometheus scrapes lives on the
+    # conventional OpenTelemetry port instead.
+    endpoint: 0.0.0.0:9464
+    namespace: otelcol
+    # Prometheus v3 can store native (exponential) histograms; keep false here
+    # so the bucket lesson in docs/08c transfers to any Prometheus you meet.
+    send_native_histograms: false
+    metric_exemptions:
+      # Silence the collector's own chatter so /metrics stays readable.
+      otelcol_process_uptime: true
+
+  debug:
+    verbosity: basic
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  # The collector's own metrics were not listening anywhere by default in
+  # 0.164, which left the Prometheus job `otel-collector-internal` permanently
+  # down and TargetDown permanently firing. Bind the internal pull exporter to
+  # 8888 on all interfaces so the scrape job has something to read.
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]

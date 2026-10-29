@@ -1,0 +1,35 @@
+                                                                               QUERY PLAN                                                                               
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=5180.37..5180.38 rows=1 width=26) (actual time=33.989..33.991 rows=3.00 loops=1)
+   Sort Key: (COALESCE(sum(o.total_cents), '0'::bigint)) DESC
+   Sort Method: quicksort  Memory: 25kB
+   Buffers: shared hit=9684 read=67
+   ->  HashAggregate  (cost=5180.35..5180.36 rows=1 width=26) (actual time=33.966..33.969 rows=3.00 loops=1)
+         Group Key: o.status
+         Batches: 1  Memory Usage: 32kB
+         Buffers: shared hit=9681 read=67
+         ->  Nested Loop  (cost=448.91..4703.99 rows=63515 width=14) (actual time=2.994..21.992 rows=63164.00 loops=1)
+               Buffers: shared hit=9681 read=67
+               ->  Hash Right Join  (cost=448.61..817.52 rows=4630 width=22) (actual time=2.704..5.212 rows=4599.00 loops=1)
+                     Hash Cond: (p.order_id = o.id)
+                     Buffers: shared hit=450
+                     ->  Seq Scan on payments p  (cost=0.00..336.48 rows=12348 width=8) (actual time=0.004..0.832 rows=12359.00 loops=1)
+                           Buffers: shared hit=213
+                     ->  Hash  (cost=390.90..390.90 rows=4617 width=22) (actual time=1.978..1.978 rows=4599.00 loops=1)
+                           Buckets: 8192  Batches: 1  Memory Usage: 316kB
+                           Buffers: shared hit=237
+                           ->  Seq Scan on orders o  (cost=0.00..390.90 rows=4617 width=22) (actual time=0.434..1.297 rows=4599.00 loops=1)
+                                 Filter: (tenant_id = 'tenant_initech'::text)
+                                 Rows Removed by Filter: 7799
+                                 Buffers: shared hit=237
+               ->  Index Only Scan using idx_order_items_order_id on order_items oi  (cost=0.29..0.70 rows=14 width=8) (actual time=0.001..0.002 rows=13.73 loops=4599)
+                     Index Cond: (order_id = o.id)
+                     Heap Fetches: 99
+                     Index Searches: 4599
+                     Buffers: shared hit=9231 read=67
+ Planning:
+   Buffers: shared hit=266
+ Planning Time: 0.805 ms
+ Execution Time: 34.070 ms
+(31 rows)
+

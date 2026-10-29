@@ -1,0 +1,54 @@
+=== MEM per container (aggregated by name) ===
+### topk(5, sum by (name) (container_memory_working_set_bytes{name=~"observability-learn-.*"}) / 1e6)
+    {"name": "observability-learn-prometheus-1"} = 343.007232
+    {"name": "observability-learn-tempo-1"} = 321.499136
+    {"name": "observability-learn-grafana-1"} = 306.528256
+    {"name": "observability-learn-cadvisor-1"} = 183.353344
+    {"name": "observability-learn-postgres-1"} = 118.898688
+=== MEM vs LIMIT: needs group_left ===
+### 100 * sum by (name) (container_memory_working_set_bytes{name=~"observability-learn-.*"}) / on(name) group_left () sum by (name) (container_spec_memory_limit_bytes{name=~"observability-learn-.*"} > 0)
+    {"name": "observability-learn-cadvisor-1"} = 91.07259114583
+    {"name": "observability-learn-grafana-1"} = 76.12711588541
+    {"name": "observability-learn-prometheus-1"} = 63.89007568359
+    {"name": "observability-learn-tempo-1"} = 59.88388061523
+    {"name": "observability-learn-alloy-1"} = 43.15185546875
+    {"name": "observability-learn-postgres-1"} = 29.52880859375
+=== MEM vs LIMIT (simpler, same label set) ===
+### topk(5, 100 * container_memory_working_set_bytes{name=~"observability-learn-.*"} / container_spec_memory_limit_bytes{name=~"observability-learn-.*"})
+    {"container_label_com_docker_compose_config_hash": "7edcdb5ade60cd06ed652ff0a38a97bed8ab642d387 = 91.07259114583
+    {"container_label_com_docker_compose_config_hash": "3eb801b498737b4b495095465ccb27a2271fc4c628a = 76.12711588541
+    {"container_label_com_docker_compose_config_hash": "c91bd5b9de6b407326b300c2f5b72f327e906e212db = 63.89007568359
+    {"container_label_com_docker_compose_config_hash": "17e3cf65ba11e9c3dcf6f6603b5dcbb80216891b050 = 59.88388061523
+    {"container_label_com_docker_compose_config_hash": "d7a4cd14333918fc5e276b1258894f7be7c1e4106f9 = 43.15185546875
+=== CPU throttling ===
+### topk(5, sum by (name) (rate(container_cpu_usage_seconds_total{name=~"observability-learn-.*"}[5m])))
+    {"name": "observability-learn-cadvisor-1"} = 0.073578481355
+    {"name": "observability-learn-postgres-1"} = 0.036261976140
+    {"name": "observability-learn-shop-api-1"} = 0.033791361185
+    {"name": "observability-learn-tempo-1"} = 0.014644197164
+    {"name": "observability-learn-grafana-1"} = 0.008743361532
+### sum by (name) (rate(container_cpu_cfs_throttled_periods_total{name=~"observability-learn-.*"}[5m]))
+   (no series)
+=== container_fs_usage: alternative ===
+### container_fs_usage_bytes{name=~"observability-learn-.*"}
+   (no series)
+### count by (name) (container_fs_usage_bytes)
+    {} = 65
+=== docker disk via node ===
+### sum by (device,mountpoint) (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_avail_bytes{mountpoint="/"}) / 1e9
+    {"device": "/dev/sda2", "mountpoint": "/"} = 113.422782464
+=== restart detection ===
+### changes(container_start_time_seconds{name=~"observability-learn-.*"}[30m])
+    {"container_label_com_docker_compose_config_hash": "0893c0ac5ae1f98147a20f13e505081bc5754ccf76e = 0
+    {"container_label_com_docker_compose_config_hash": "17e3cf65ba11e9c3dcf6f6603b5dcbb80216891b050 = 0
+    {"container_label_com_docker_compose_config_hash": "3eb801b498737b4b495095465ccb27a2271fc4c628a = 0
+    {"container_label_com_docker_compose_config_hash": "497ff755845eee88be5e8060f51c00871e67afee3f8 = 0
+    {"container_label_com_docker_compose_config_hash": "5d0d8f936c21a6c2b281609f8827a64d38eb0163bfb = 0
+    {"container_label_com_docker_compose_config_hash": "7edcdb5ade60cd06ed652ff0a38a97bed8ab642d387 = 0
+=== stale postgres series (two containers) ===
+### container_last_seen{name="observability-learn-postgres-1"}
+    {"__name__": "container_last_seen", "container_label_com_docker_compose_config_hash": "6299ba96 = 1793257352
+    {"__name__": "container_last_seen", "container_label_com_docker_compose_config_hash": "5d0d8f93 = 1793257082
+### count by (id) (container_last_seen{name="observability-learn-postgres-1"})
+    {"id": "/system.slice/docker-c074dfe709d47554f63f1859b084ef82a9f868085b69af24f36919c0730fc142.s = 1
+    {"id": "/system.slice/docker-10e0c23b84f617f1ddfbff050334d2f017727db884d70a5ef52e9d4639311070.s = 1

@@ -1,0 +1,47 @@
+=== CONTAINER CPU (cadvisor) ===
+### topk(5, sum by (name) (rate(container_cpu_usage_seconds_total{image!=""}[5m])))
+    {"name": "observability-learn-cadvisor-1"} = 0.071602089662
+    {"name": "observability-learn-postgres-1"} = 0.034831593140
+    {"name": "observability-learn-shop-api-1"} = 0.033987323243
+    {"name": "observability-learn-tempo-1"} = 0.014126980333
+    {"name": "observability-learn-payment-gateway-1"} = 0.008713749119
+=== CONTAINER MEM ===
+### topk(5, container_memory_working_set_bytes{name!=""} / 1e6)
+    {"container_label_com_docker_compose_config_hash": "c91bd5b9de6b407326b300c2f5b72f327e906e212dbfc901b5688 = 340.25472
+    {"container_label_com_docker_compose_config_hash": "17e3cf65ba11e9c3dcf6f6603b5dcbb80216891b05045ec07feec = 320.933888
+    {"container_label_com_docker_compose_config_hash": "3eb801b498737b4b495095465ccb27a2271fc4c628ade2046fc2c = 293.810176
+    {"container_label_com_docker_compose_config_hash": "7edcdb5ade60cd06ed652ff0a38a97bed8ab642d387b497eabf48 = 186.372096
+    {"container_label_com_docker_compose_config_hash": "9128964d59812578a54672dd03d483f9347a63f02b909d391b5ce = 113.700864
+=== MEM LIMIT USED PCT ===
+### topk(5, 100 * container_memory_working_set_bytes{name!=""} / on(name) container_spec_memory_limit_bytes{name!=""} > 0)
+  ERROR multiple matches for labels: many-to-one matching must be explicit (group_left/group_right)
+=== RESTARTS / OOM-KILLED ===
+### increase(container_start_time_seconds{name!=""}[30m]) > 0
+   (no series)
+### count by (name) (container_last_seen{name!=""})
+    {"name": "observability-learn-postgres-1"} = 2
+    {"name": "observability-learn-node-exporter-1"} = 1
+    {"name": "proxy-learn-nginx"} = 1
+    {"name": "observability-learn-tempo-1"} = 1
+    {"name": "infra-redis-1"} = 1
+=== CONTAINER FS ===
+### topk(5, container_fs_usage_bytes{name!=""} / 1e6)
+   (no series)
+=== NODE DISK ===
+### 100 * (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"})
+    {"device": "/dev/sda2", "fstype": "ext4", "instance": "node-exporter:9100", "job": "node-exporter", "moun = 45.26101752539
+=== NODE MEM/CPU ===
+### (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100
+    {"instance": "node-exporter:9100", "job": "node-exporter", "service": "node-exporter"} = 71.89165030221
+### 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+    {"instance": "node-exporter:9100"} = 17.32149122807
+=== NET ERRORS / TCP ===
+### rate(node_network_receive_errs_total[5m])
+    {"device": "eth0", "instance": "node-exporter:9100", "job": "node-exporter", "service": "node-exporter"} = 0
+    {"device": "lo", "instance": "node-exporter:9100", "job": "node-exporter", "service": "node-exporter"} = 0
+### node_netstat_Tcp_CurrEstab
+    {"__name__": "node_netstat_Tcp_CurrEstab", "instance": "node-exporter:9100", "job": "node-exporter", "ser = 1
+=== FILE DESCRIPTORS ===
+### process_open_fds{job=~"shop-api|prometheus|loki"}
+    {"__name__": "process_open_fds", "instance": "loki:3100", "job": "loki", "service": "loki"} = 32
+    {"__name__": "process_open_fds", "instance": "localhost:9090", "job": "prometheus", "service": "prometheu = 24

@@ -1,0 +1,3 @@
+outage: 120s of mode=timeout for tenant_initech
+watch: Grafana > 00 - Stack health,  Prometheus > Alerts,  Loki > {tenant_id="tenant_initech"}
+outage: stopped. Alerts resolve on their own within the rule's 'for' window.

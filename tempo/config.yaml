@@ -1,0 +1,67 @@
+# Tempo 3.1, single target (-target=all, the default), local filesystem storage.
+#
+# IMPORTANT, verified against grafana/tempo:3.1.1: the 2.x blocks `ingester:`,
+# `compactor:`, `search:`, `traces:` and the `block.v2_encoding` key are gone.
+# The upstream v3 examples use `distributor.receivers`, `storage.trace.block.version:
+# vParquet4`, `backend_worker.compaction.block_retention` and
+# `overrides.defaults.metrics_generator.processors`. Configs copied from 2.x
+# tutorials fail with "field traces not found in type app.Config".
+#
+# You can check a Tempo config without starting anything:
+#   docker run --rm -v "$PWD/tempo/config.yaml:/c.yaml:ro" --entrypoint /tempo \
+#     grafana/tempo:3.1.1 -config.file=/c.yaml -config.verify
+
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+  log_level: warn
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+  # Turn this on for an hour when spans go missing; it logs one line per
+  # accepted trace. Far too noisy to leave enabled.
+  log_received_spans:
+    enabled: false
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/blocks
+    wal:
+      path: /var/tempo/wal
+    block:
+      version: vParquet4
+    # 5m default; 1m so freshly flushed blocks show up while you are learning.
+    blocklist_poll: 1m
+
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      cluster: local-learning
+  storage:
+    path: /var/tempo/generator/wal
+    # Needs Prometheus started with --web.enable-remote-write-receiver.
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+
+overrides:
+  defaults:
+    metrics_generator:
+      # span-metrics gives you per-service request rate/errors/duration from
+      # traces; service-graphs gives you the dependency map in Tempo's UI.
+      processors: ["span-metrics", "service-graphs"]
+
+backend_worker:
+  compaction:
+    # Traces expire. 72h matches Loki here so the whole stack ages together.
+    block_retention: 72h
+
+usage_report:
+  reporting_enabled: false

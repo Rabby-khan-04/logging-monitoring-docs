@@ -1,0 +1,12 @@
+                                                                  QUERY PLAN                                                                   
+-----------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using idx_order_items_order_id on order_items oi  (cost=0.29..8.54 rows=14 width=30) (actual time=0.269..0.272 rows=12.00 loops=1)
+   Index Cond: (order_id = 4321)
+   Index Searches: 1
+   Buffers: shared hit=5 read=1
+ Planning:
+   Buffers: shared hit=87
+ Planning Time: 0.293 ms
+ Execution Time: 0.302 ms
+(8 rows)
+
